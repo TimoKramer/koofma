@@ -6,7 +6,15 @@
     [koofma.persist :as persist]
     [koofma.sync :as sync]
     [koofma.views :as views]
-    [replicant.dom :as r]))
+    [replicant.dom :as r]
+    [taoensso.trove :as trove]
+    [taoensso.trove.console :as trove-console]))
+
+
+;; konserve logs through the trove facade, whose cljs default prints every
+;; level (trace/debug included) to the browser console. Only show warnings
+;; and errors; use :debug here when chasing a storage or sync problem.
+(trove/set-log-fn! (trove-console/get-log-fn {:min-level :warn}))
 
 
 ;; Composition root: the one global reference, required by shadow-cljs's
