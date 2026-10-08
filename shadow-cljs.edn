@@ -1,0 +1,8 @@
+{:deps {:aliases [:shadow-deps]}
+ :dev-http {8080 "public"}
+ :builds
+ {:app {:target :browser
+        :output-dir "public/js"
+        :asset-path "/js"
+        :modules {:main {:init-fn koofma.main/init!}}
+        :devtools {:after-load koofma.main/reload!}}}}

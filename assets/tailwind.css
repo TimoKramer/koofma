@@ -1,0 +1,11 @@
+@import "tailwindcss";
+@plugin "daisyui" {
+  themes: light --default, dark --prefersdark;
+}
+@source "../src";
+
+/* Drag handle must not scroll the page on touch while dragging. */
+.drag-handle {
+  touch-action: none;
+  cursor: grab;
+}
