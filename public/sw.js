@@ -1,14 +1,30 @@
 // Cache-first app shell. Only the code needs to load offline — data offline
-// is IndexedDB's job (see koofma.persist). No file list to maintain: every
-// same-origin GET response gets cached the first time it's fetched online,
-// then served from cache thereafter.
-const CACHE = "koofma-shell-v2";
+// is IndexedDB's job (see koofma.persist). The whole shell is precached on
+// install, so a single online visit is enough to work offline afterwards.
+//
+// __BUILD__ is replaced with the commit sha by the deploy workflow. Each
+// deploy therefore ships a byte-different sw.js: the browser installs it,
+// fills a fresh cache and shows the "reload for update" toast, and the old
+// cache is dropped on activate. (main.js has no content hash in its name, so
+// without this a cache-first worker would serve stale code forever.)
+const CACHE = "koofma-shell-__BUILD__";
+
+// Relative to this script's own URL, so it precaches the right thing whether
+// served at the origin root or under a subpath (GitHub Pages: /<repo>/).
+const SHELL = [
+  "./",
+  "index.html",
+  "js/main.js",
+  "css/app.css",
+  "manifest.json",
+  "icon.svg",
+  "icon-192.png",
+  "icon-512.png",
+  "icon-maskable-512.png",
+];
 
 self.addEventListener("install", (event) => {
-  // Relative to this script's own URL, so it precaches the right thing
-  // whether served at the origin root or under a subpath (e.g. GitHub
-  // Pages project sites at /<repo>/).
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.add("./")));
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)));
 });
 
 self.addEventListener("activate", (event) => {

@@ -47,6 +47,9 @@ jobs:
       - name: Build ClojureScript (release)
         run: npx shadow-cljs release app
 
+      - name: Version the service worker cache
+        run: sed -i "s/koofma-shell-__BUILD__/koofma-shell-${GITHUB_SHA::12}/" public/sw.js
+
       - uses: actions/configure-pages@v6
 
       - uses: actions/upload-pages-artifact@v5
