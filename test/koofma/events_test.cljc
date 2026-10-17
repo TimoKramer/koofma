@@ -1,6 +1,6 @@
 (ns koofma.events-test
   (:require
-    [clojure.test :refer [deftest is]]
+    [clojure.test :refer [deftest is testing]]
     [koofma.events :as e]
     [koofma.hlc :as hlc]
     [koofma.model :as m]))
@@ -12,10 +12,27 @@
 (defn- add [db id title] (e/handle db [:item/add {:id id :title title}] 1000))
 
 
-(deftest add-stamps-and-appends
+(deftest add-stamps-and-inserts-at-top
   (let [db (-> db0 (add :a "milk") (add :b "eggs"))]
-    (is (= [:a :b] (map first (m/items (:doc db)))))
+    (is (= [:b :a] (map first (m/items (:doc db)))) "newest item first")
     (is (hlc/before? (:clock db0) (:clock db)))))
+
+
+(deftest duplicates-are-rejected
+  (let [db  (-> db0 (add :a "Milk"))
+        dup (add db :b "  milk ")]
+    (is (= (:doc db) (:doc dup)) "doc untouched")
+    (is (= {:type :duplicate :title "milk"} (:flash dup)))
+    (is (= (:clock db) (:clock dup)) "no stamp for a rejected add")
+    (testing "a checked-off title can be added again"
+      (let [gone (e/handle db [:item/check {:id :a}] 2000)]
+        (is (= 1 (count (m/items (:doc (add gone :c "milk"))))))))
+    (testing "blank titles are ignored"
+      (is (= (:doc db) (:doc (add db :d "   ")))))))
+
+
+(deftest add-clears-draft
+  (is (nil? (:draft (add (assoc db0 :draft "mi") :a "milk")))))
 
 
 (deftest check-deletes-and-undo-restores
@@ -28,9 +45,10 @@
 
 
 (deftest move-reorders-and-ignores-noops
-  (let [db (-> db0 (add :a "a") (add :b "b") (add :c "c"))
-        moved (e/handle db [:item/move {:id :c :target-id :a :after? false}] 2000)]
-    (is (= [:c :a :b] (map first (m/items (:doc moved)))))
+  (let [db (-> db0 (add :a "a") (add :b "b") (add :c "c"))   ; list: c b a
+        moved (e/handle db [:item/move {:id :a :target-id :c :after? false}] 2000)]
+    (is (= [:c :b :a] (map first (m/items (:doc db)))))
+    (is (= [:a :c :b] (map first (m/items (:doc moved)))))
     (is (= db (e/handle db [:item/move {:id :a :target-id :a :after? true}] 2000)))))
 
 

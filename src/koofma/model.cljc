@@ -28,6 +28,12 @@
   (assoc-in doc [:items id k] (reg v t)))
 
 
+(defn normalize
+  "Case- and whitespace-insensitive key for comparing titles."
+  [title]
+  (str/lower-case (str/trim (or title ""))))
+
+
 (defn alive?
   [item]
   (not (fval item :deleted)))
@@ -53,9 +59,9 @@
     :else       1.0))
 
 
-(defn rank-at-end
+(defn rank-at-top
   [doc]
-  (rank-between (some-> (last (items doc)) second (fval :rank)) nil))
+  (rank-between nil (some-> (first (items doc)) second (fval :rank))))
 
 
 (defn rank-for-drop
@@ -70,6 +76,17 @@
               rank-at     #(some-> (get others %) second (fval :rank))]
           (rank-between (when (<= 0 lo-i) (rank-at lo-i))
                         (rank-at hi-i)))))))
+
+
+;; lookup ---------------------------------------------------------------------
+
+(defn find-alive-by-title
+  "Id of an item on the list whose title equals `title` (ignoring case and
+  surrounding whitespace), or nil."
+  [doc title]
+  (let [k (normalize title)]
+    (some (fn [[id item]] (when (= k (normalize (fval item :title))) id))
+          (items doc))))
 
 
 ;; item operations -------------------------------------------------------------
@@ -104,11 +121,6 @@
 
 ;; suggestions -----------------------------------------------------------------
 
-(defn- normalize
-  [title]
-  (str/lower-case (str/trim title)))
-
-
 (defn suggestions
   "Distinct titles from every item ever entered — alive or checked off — that
   are not currently on the list, most frequently used first, ties broken by
@@ -128,3 +140,15 @@
                  (let [c (compare n2 n1)]
                    (if (zero? c) (compare t2 t1) c))))
          (map #(nth % 2)))))
+
+
+(defn matching-suggestions
+  "At most `n` suggestions containing `draft`, prefix matches first. Empty
+  for a blank draft."
+  [doc draft n]
+  (let [q (normalize draft)]
+    (if (str/blank? q)
+      []
+      (let [hits (filter #(str/includes? (normalize %) q) (suggestions doc))
+            {pre true rest false} (group-by #(str/starts-with? (normalize %) q) hits)]
+        (take n (concat pre rest))))))

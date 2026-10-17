@@ -3,6 +3,7 @@
   pure: (handle db event now-ms) -> db'. HLC stamps are minted here and
   nowhere else; one event = one stamp."
   (:require
+    [clojure.string :as str]
     [koofma.crdt :as crdt]
     [koofma.hlc :as hlc]
     [koofma.model :as model]))
@@ -24,10 +25,20 @@
 
 (defmethod handle :item/add
   [db [_ {:keys [id title]}] now]
-  (let [[db' t] (stamp db now)
-        id      (or id (random-uuid))
-        rank    (model/rank-at-end (:doc db))]
-    (update db' :doc model/add-item id title rank t)))
+  (let [title (str/trim (or title ""))
+        db    (dissoc db :draft)]
+    (cond
+      (str/blank? title)
+      db
+
+      (model/find-alive-by-title (:doc db) title)
+      (assoc db :flash {:type :duplicate :title title})
+
+      :else
+      (let [[db' t] (stamp db now)
+            id      (or id (random-uuid))
+            rank    (model/rank-at-top (:doc db))]
+        (update db' :doc model/add-item id title rank t)))))
 
 
 (defmethod handle :item/set-title
@@ -91,6 +102,11 @@
 (defmethod handle :ui/edit-item
   [db [_ {:keys [id]}] _]
   (assoc db :editing-id id))
+
+
+(defmethod handle :ui/set-draft
+  [db [_ {:keys [text]}] _]
+  (assoc db :draft text))
 
 
 (defmethod handle :ui/stop-editing

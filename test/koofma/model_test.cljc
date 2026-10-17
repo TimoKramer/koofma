@@ -26,9 +26,29 @@
     (is (= [:a :b :c] (ids (m/undelete-item doc :b (hlc/tick t0 2)))))))
 
 
-(deftest rank-at-end-appends
-  (is (= 1.0 (m/rank-at-end m/empty-doc)))
-  (is (= 3.0 (m/rank-at-end (build [:a "x"] [:b "y"])))))
+(deftest rank-at-top-prepends
+  (is (= 1.0 (m/rank-at-top m/empty-doc)))
+  (is (= 0.0 (m/rank-at-top (build [:a "x"] [:b "y"])))))
+
+
+(deftest find-alive-by-title-ignores-case-and-deleted
+  (let [doc (-> (build [:a "Milk"] [:b "eggs"])
+                (m/delete-item :b (hlc/tick t0 1)))]
+    (is (= :a (m/find-alive-by-title doc " milk ")))
+    (is (nil? (m/find-alive-by-title doc "eggs")) "checked off = not on the list")))
+
+
+(deftest matching-suggestions-filter-and-order
+  (let [doc (-> (build [:a "Apfelsaft"] [:b "Saft"] [:c "Brot"] [:d "Sahne"])
+                (m/delete-item :a (hlc/tick t0 1))
+                (m/delete-item :b (hlc/tick t0 1))
+                (m/delete-item :c (hlc/tick t0 1))
+                (m/delete-item :d (hlc/tick t0 1)))]
+    (is (= ["Saft" "Sahne" "Apfelsaft"] (take 3 (m/matching-suggestions doc "sa" 6))))
+    (is (= ["Saft" "Apfelsaft"] (m/matching-suggestions doc "saf" 6)) "prefix matches first")
+    (is (= [] (m/matching-suggestions doc "  " 6)))
+    (is (= [] (m/matching-suggestions doc nil 6)) "no draft yet")
+    (is (= 1 (count (m/matching-suggestions doc "sa" 1))))))
 
 
 (deftest rank-for-drop-places-relative-to-target

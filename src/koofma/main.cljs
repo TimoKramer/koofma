@@ -105,6 +105,10 @@
       (let [[event] args]
         (app/dispatch! system event))
 
+      :action/set-draft
+      (let [[text] args]
+        (app/dispatch! system [:ui/set-draft {:text text}]))
+
       :action/add-item
       (let [[key title target] args]
         (when (and (= key "Enter") (seq (str/trim title)))
