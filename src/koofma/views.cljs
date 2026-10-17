@@ -49,22 +49,20 @@
 
 
 (defn- quick-add
-  "Text input plus a suggestion list built from everything entered before
-  (see model/matching-suggestions). Own dropdown rather than a <datalist>,
-  which browsers show inconsistently — and not at all with autocomplete off."
-  [draft matches]
-  [:div.relative.mb-3
-   [:input.input.input-bordered.w-full
-    {:type "text" :placeholder "Add an item…" :autofocus true
-     :autocomplete "off" :autocapitalize "sentences"
-     :value (or draft "")
-     :on {:input   [[:action/set-draft :event/target.value]]
-          :keydown [[:action/add-item :event/key :event/target.value :event/target]]}}]
-   (when (seq matches)
-     [:ul.menu.bg-base-100.rounded-box.shadow-lg.border.border-base-300.w-full.absolute.z-30.mt-1
-      (for [title matches]
-        [:li {:replicant/key title}
-         [:a {:on {:click [[:action/dispatch [:item/add {:title title}]]]}} title]])])])
+  "A real form so the browser offers (and records) its own autofill history
+  for the field. The submit goes to a hidden iframe, which counts as a genuine
+  submission for the browser but keeps the page where it is — see
+  koofma.main/execute-actions! for why this form's submit is not
+  preventDefault'ed."
+  []
+  (list
+    [:iframe {:name "form-sink" :hidden true :tab-index -1}]
+    [:form#add-form.mb-3
+     {:method "post" :action "about:blank" :target "form-sink" :autocomplete "on"
+      :on {:submit [[:action/add-item :event/target]]}}
+     [:input.input.input-bordered.w-full
+      {:type "text" :name "item" :placeholder "Add an item…" :autofocus true
+       :autocomplete "on" :autocapitalize "sentences" :enterkeyhint "done"}]]))
 
 
 (defn- flash-toast
@@ -140,7 +138,7 @@
 
 
 (defn app-view
-  [{:keys [doc flash sync-state sync-error remote-config editing-id draft] :as db}]
+  [{:keys [doc flash sync-state sync-error remote-config editing-id] :as db}]
   [:div.max-w-xl.mx-auto.p-4
    [:div.navbar.bg-base-200.rounded-box.mb-4
     [:div.flex-1 [:h1.text-xl.font-bold.px-2 "koofma"]]
@@ -148,7 +146,7 @@
      (sync-indicator sync-state)
      [:button.btn.btn-ghost.btn-circle.btn-sm
       {:on {:click [[:action/open-settings]]}} "⚙"]]]
-   (quick-add draft (model/matching-suggestions doc draft 6))
+   (quick-add)
    [:ul#items.flex.flex-col.gap-1
     (for [[id :as entry] (model/items doc)]
       (item-row entry (= editing-id id) db))]

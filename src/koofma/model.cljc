@@ -3,8 +3,7 @@
   HLC stamp `t` as an argument — stamps are minted in one place (the event
   funnel), never here.
 
-  Checking an item off deletes it (a tombstone), so there is no done flag; the
-  tombstoned titles double as the history that feeds input suggestions."
+  Checking an item off deletes it (a tombstone), so there is no done flag."
   (:require
     [clojure.string :as str]))
 
@@ -117,38 +116,3 @@
 (defn move-item
   [doc id rank t]
   (set-field doc id :rank rank t))
-
-
-;; suggestions -----------------------------------------------------------------
-
-(defn suggestions
-  "Distinct titles from every item ever entered — alive or checked off — that
-  are not currently on the list, most frequently used first, ties broken by
-  most recent. Keeps the casing of the latest entry."
-  [doc]
-  (let [alive-titles (into #{} (map (comp normalize #(fval % :title) second)) (items doc))]
-    (->> (vals (:items doc))
-         (filter #(some? (fval % :title)))
-         (group-by (comp normalize #(fval % :title)))
-         (remove (fn [[k _]] (contains? alive-titles k)))
-         (map (fn [[_ group]]
-                (let [latest (reduce #(if (neg? (compare (get-in %1 [:title :t]) (get-in %2 [:title :t]))) %2 %1) group)]
-                  [(count group)
-                   (get-in latest [:title :t])
-                   (fval latest :title)])))
-         (sort (fn [[n1 t1 _] [n2 t2 _]]
-                 (let [c (compare n2 n1)]
-                   (if (zero? c) (compare t2 t1) c))))
-         (map #(nth % 2)))))
-
-
-(defn matching-suggestions
-  "At most `n` suggestions containing `draft`, prefix matches first. Empty
-  for a blank draft."
-  [doc draft n]
-  (let [q (normalize draft)]
-    (if (str/blank? q)
-      []
-      (let [hits (filter #(str/includes? (normalize %) q) (suggestions doc))
-            {pre true rest false} (group-by #(str/starts-with? (normalize %) q) hits)]
-        (take n (concat pre rest))))))

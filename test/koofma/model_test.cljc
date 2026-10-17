@@ -38,19 +38,6 @@
     (is (nil? (m/find-alive-by-title doc "eggs")) "checked off = not on the list")))
 
 
-(deftest matching-suggestions-filter-and-order
-  (let [doc (-> (build [:a "Apfelsaft"] [:b "Saft"] [:c "Brot"] [:d "Sahne"])
-                (m/delete-item :a (hlc/tick t0 1))
-                (m/delete-item :b (hlc/tick t0 1))
-                (m/delete-item :c (hlc/tick t0 1))
-                (m/delete-item :d (hlc/tick t0 1)))]
-    (is (= ["Saft" "Sahne" "Apfelsaft"] (take 3 (m/matching-suggestions doc "sa" 6))))
-    (is (= ["Saft" "Apfelsaft"] (m/matching-suggestions doc "saf" 6)) "prefix matches first")
-    (is (= [] (m/matching-suggestions doc "  " 6)))
-    (is (= [] (m/matching-suggestions doc nil 6)) "no draft yet")
-    (is (= 1 (count (m/matching-suggestions doc "sa" 1))))))
-
-
 (deftest rank-for-drop-places-relative-to-target
   (let [doc (build [:a "a"] [:b "b"] [:c "c"])
         move (fn [id target after?]
@@ -70,16 +57,3 @@
                (let [r (m/rank-for-drop d :b :a false)]
                  (m/move-item d :b r (hlc/tick t0 i))))]
     (is (= [:b :a] (ids (step doc 1))))))
-
-
-(deftest suggestions-from-history
-  (let [doc (-> (build [:a "Milk"] [:b "eggs"] [:c "milk"] [:d "Bread"])
-                (m/delete-item :c (hlc/tick t0 1))
-                (m/delete-item :b (hlc/tick t0 1)))]
-    (is (= ["eggs"] (m/suggestions doc))
-        "milk and bread are on the list (case-insensitive); eggs was checked off")
-    (testing "frequency first"
-      (let [doc (-> doc
-                    (m/add-item :e "Eggs" 9.0 (hlc/tick t0 5))
-                    (m/delete-item :e (hlc/tick t0 6)))]
-        (is (= ["Eggs"] (m/suggestions doc)) "one entry per distinct title")))))

@@ -25,8 +25,7 @@
 
 (defmethod handle :item/add
   [db [_ {:keys [id title]}] now]
-  (let [title (str/trim (or title ""))
-        db    (dissoc db :draft)]
+  (let [title (str/trim (or title ""))]
     (cond
       (str/blank? title)
       db
@@ -102,11 +101,6 @@
 (defmethod handle :ui/edit-item
   [db [_ {:keys [id]}] _]
   (assoc db :editing-id id))
-
-
-(defmethod handle :ui/set-draft
-  [db [_ {:keys [text]}] _]
-  (assoc db :draft text))
 
 
 (defmethod handle :ui/stop-editing

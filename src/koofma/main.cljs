@@ -105,15 +105,14 @@
       (let [[event] args]
         (app/dispatch! system event))
 
-      :action/set-draft
-      (let [[text] args]
-        (app/dispatch! system [:ui/set-draft {:text text}]))
-
       :action/add-item
-      (let [[key title target] args]
-        (when (and (= key "Enter") (seq (str/trim title)))
-          (app/dispatch! system [:item/add {:title (str/trim title)}])
-          (set! (.-value target) "")))
+      (let [[form] args
+            input  (.. form -elements (namedItem "item"))
+            title  (str/trim (.-value input))]
+        (when (seq title)
+          (app/dispatch! system [:item/add {:title title}]))
+        ;; clear after the browser has read the value for its autofill history
+        (js/setTimeout #(set! (.-value input) "") 0))
 
       :action/set-title
       (let [[id key title] args]
@@ -230,8 +229,11 @@
           system (app/new-system store (<! (persist/load-db store)))]
       (reset! !system system)
       (r/set-dispatch! (fn [{:replicant/keys [dom-event]} actions]
-                         ;; submit: don't navigate/reload
-                         (when (= "submit" (.-type dom-event))
+                         ;; submit: don't navigate/reload — except the add form,
+                         ;; which must be a genuine submit (to a hidden iframe)
+                         ;; for the browser to record its autofill history
+                         (when (and (= "submit" (.-type dom-event))
+                                    (not= "add-form" (.. dom-event -target -id)))
                            (.preventDefault dom-event))
                          (execute-actions! system dom-event actions)))
       (when-let [spec (:remote-config @(:app-db system))]

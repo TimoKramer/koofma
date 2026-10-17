@@ -31,10 +31,6 @@
       (is (= (:doc db) (:doc (add db :d "   ")))))))
 
 
-(deftest add-clears-draft
-  (is (nil? (:draft (add (assoc db0 :draft "mi") :a "milk")))))
-
-
 (deftest check-deletes-and-undo-restores
   (let [db      (add db0 :a "milk")
         checked (e/handle db [:item/check {:id :a}] 2000)
