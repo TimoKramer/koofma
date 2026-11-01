@@ -1,6 +1,7 @@
 (ns koofma.crdt
   "Merge for documents of per-field LWW registers.
-  A register is {:v value :t hlc}; a doc is {:items {item-id {field register}}}.")
+  A register is {:v value :t hlc}; a doc is a map of collections (:items,
+  :lists) of entities, {collection {entity-id {field register}}}.")
 
 
 (defn- latest
@@ -16,17 +17,19 @@
 
 
 (defn merge-docs
-  "Commutative, associative, idempotent merge of two item documents."
+  "Commutative, associative, idempotent merge of two documents."
   [a b]
-  {:items (merge-with #(merge-with latest %1 %2) (:items a) (:items b))})
+  (merge-with (fn [coll-a coll-b]
+                (merge-with #(merge-with latest %1 %2) coll-a coll-b))
+              a b))
 
 
 (defn latest-stamp
   "Greatest HLC present in doc, or nil. Used to advance the local clock after
   merging remote data."
   [doc]
-  (->> (:items doc)
-       vals
+  (->> (vals doc)
+       (mapcat vals)
        (mapcat vals)
        (map :t)
        (reduce (fn [m t] (if (and m (pos? (compare m t))) m t)) nil)))

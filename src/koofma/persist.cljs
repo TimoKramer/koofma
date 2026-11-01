@@ -11,7 +11,7 @@
 
 (def db-name "koofma")
 
-(def persisted-keys [:doc :clock :remote-config])
+(def persisted-keys [:doc :clock :remote-config :current-list])
 
 
 (defn connect
@@ -35,6 +35,8 @@
        ;; the S3/R2 spec entered in the settings screen, if any — koofma.main
        ;; reconnects with it on boot; :sync-state itself is not persisted.
        :remote-config (<! (k/get store :remote-config nil {:sync? false}))
+       ;; per device, not synced: each user stays on the list they last opened
+       :current-list  (<! (k/get store :current-list nil {:sync? false}))
        :sync-state    :not-configured})))
 
 

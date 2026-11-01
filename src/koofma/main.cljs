@@ -129,11 +129,36 @@
         (.preventDefault dom-event)
         (app/dispatch! system [:ui/drag-start {:id id}]))
 
-      :action/undo-check
-      (let [[id] args]
+      :action/undo
+      (let [[event] args]
         (some-> @flash-timeout js/clearTimeout)
-        (app/dispatch! system [:item/undelete {:id id}])
+        (app/dispatch! system event)
         (app/dispatch! system [:flash/clear]))
+
+      :action/open-list-dialog
+      (let [[dialog] args]
+        ;; renders synchronously (the ::render watch), so the dialog already
+        ;; holds the right form when it opens
+        (app/dispatch! system [:ui/list-dialog dialog])
+        (some-> (js/document.getElementById "list-dialog") .showModal))
+
+      :action/close-list-dialog
+      (do (some-> (js/document.getElementById "list-dialog") .close)
+          (app/dispatch! system [:ui/list-dialog nil]))
+
+      :action/save-list
+      (let [[form] args
+            name   (.. form -elements (namedItem "name") -value)
+            {:keys [mode id]} (:list-dialog @(:app-db system))]
+        (app/dispatch! system (if (= mode :edit)
+                                [:list/rename {:id id :name name}]
+                                [:list/add {:name name}]))
+        (execute-actions! system dom-event [[:action/close-list-dialog]]))
+
+      :action/delete-list
+      (let [[id] args]
+        (app/dispatch! system [:list/delete {:id id}])
+        (execute-actions! system dom-event [[:action/close-list-dialog]]))
 
       :action/dismiss-flash
       (do (some-> @flash-timeout js/clearTimeout)

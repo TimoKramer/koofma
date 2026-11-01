@@ -18,14 +18,25 @@
 
 (def gen-item
   (gen/hash-map
+    :list    (gen-reg (gen/elements ["default" "x"]))
     :title   (gen-reg gen/string-alphanumeric)
     :rank    (gen-reg (gen/fmap double gen/nat))
     :deleted (gen-reg gen/boolean)))
 
 
+(def gen-list
+  (gen/hash-map
+    :name    (gen-reg gen/string-alphanumeric)
+    :rank    (gen-reg (gen/fmap double gen/nat))
+    :deleted (gen-reg gen/boolean)))
+
+
 (def gen-doc
-  (gen/fmap (fn [items] {:items items})
-            (gen/map gen/nat gen-item {:max-elements 8})))
+  ;; :lists sometimes absent, like docs from before there were lists
+  (gen/fmap (fn [[items lists]] (cond-> {:items items} lists (assoc :lists lists)))
+            (gen/tuple (gen/map gen/nat gen-item {:max-elements 8})
+                       (gen/one-of [(gen/return nil)
+                                    (gen/map gen/nat gen-list {:max-elements 4})]))))
 
 
 (defspec merge-is-commutative 200

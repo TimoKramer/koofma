@@ -68,7 +68,7 @@
 (defn- flash-toast
   "undo-check auto-dismisses after 5 s (see koofma.main's ::flash-auto-dismiss
   watch); sw-update sticks around until acted on."
-  [{:keys [type id title]}]
+  [{:keys [type id title undo]}]
   (when type
     [:div.toast.toast-end.toast-bottom {:replicant/key (or id type)}
      [:div.alert {:class (case type
@@ -78,13 +78,56 @@
       [:span (case type
                :duplicate (str "\"" title "\" is already on the list")
                :undo-check (str "Checked off \"" title "\"")
+               :undo-list-delete (str "Deleted list \"" title "\"")
                :sw-update "A new version of koofma is available.")]
-      (when (= type :undo-check)
-        [:button.btn.btn-sm {:on {:click [[:action/undo-check id]]}} "Undo"])
+      (when undo
+        [:button.btn.btn-sm {:on {:click [[:action/undo undo]]}} "Undo"])
       (when (= type :sw-update)
         [:button.btn.btn-sm {:on {:click [[:action/reload-for-update]]}} "Reload"])
       [:button.btn.btn-ghost.btn-sm.btn-circle
        {:on {:click [[:action/dismiss-flash]]}} "✕"]]]))
+
+
+(defn- list-tabs
+  "Tap a tab to switch lists; ✎ renames/deletes the current one, + adds one."
+  [doc current]
+  [:div.flex.items-center.gap-2.mb-3
+   [:div.tabs.tabs-box.flex-1.flex-nowrap.overflow-x-auto {:role "tablist"}
+    (for [[id l] (model/lists doc)]
+      [:button.tab.whitespace-nowrap
+       {:replicant/key id
+        :role "tab"
+        :class (when (= id current) "tab-active")
+        :on {:click (dispatch [:ui/select-list {:id id}])}}
+       (model/fval l :name)])
+    [:button.tab {:role "tab" :title "New list" :aria-label "New list"
+                  :on {:click [[:action/open-list-dialog {:mode :new}]]}}
+     "+"]]
+   [:button.btn.btn-ghost.btn-sm.btn-circle
+    {:title "Rename or delete this list" :aria-label "Rename or delete this list"
+     :on {:click [[:action/open-list-dialog {:mode :edit :id current}]]}}
+    "✎"]])
+
+
+(defn- list-dialog
+  "New-list / rename-list form. Delete only while another list remains."
+  [doc {:keys [mode id]}]
+  [:dialog#list-dialog.modal
+   [:div.modal-box
+    [:h3.font-bold.text-lg.mb-4 (if (= mode :edit) "Rename list" "New list")]
+    [:form.flex.flex-col.gap-2
+     {:on {:submit [[:action/save-list :event/target]]}}
+     [:input.input.input-bordered.w-full
+      {:replicant/key [mode id]
+       :name "name" :required true :autofocus true :autocomplete "off"
+       :placeholder "List name"
+       :value (if (= mode :edit) (model/list-name doc id) "")}]
+     [:div.modal-action
+      (when (and (= mode :edit) (< 1 (count (model/lists doc))))
+        [:button.btn.btn-error.btn-outline.mr-auto
+         {:type "button" :on {:click [[:action/delete-list id]]}} "Delete"])
+      [:button.btn {:type "button" :on {:click [[:action/close-list-dialog]]}} "Cancel"]
+      [:button.btn.btn-primary {:type "submit"} "Save"]]]]])
 
 
 (defn- sync-indicator
@@ -138,19 +181,24 @@
 
 
 (defn app-view
-  [{:keys [doc flash sync-state sync-error remote-config editing-id] :as db}]
-  [:div.max-w-xl.mx-auto.p-4
-   [:div.navbar.bg-base-200.rounded-box.mb-4
-    [:div.flex-1 [:h1.text-xl.font-bold.px-2 "koofma"]]
-    [:div.flex-none.gap-2.px-2
-     (sync-indicator sync-state)
-     [:button.btn.btn-ghost.btn-circle.btn-sm
-      {:on {:click [[:action/open-settings]]}} "⚙"]]]
-   (quick-add)
-   [:ul#items.flex.flex-col.gap-1
-    (for [[id :as entry] (model/items doc)]
-      (item-row entry (= editing-id id) db))]
-   (when (empty? (model/items doc))
-     [:p.text-center.opacity-60.mt-8 "Nothing to buy."])
-   (flash-toast flash)
-   (settings-dialog remote-config sync-state sync-error)])
+  [{:keys [doc flash sync-state sync-error remote-config editing-id current-list]
+    dialog :list-dialog :as db}]
+  (let [current (model/resolve-list doc current-list)
+        items   (model/items doc current)]
+    [:div.max-w-xl.mx-auto.p-4
+     [:div.navbar.bg-base-200.rounded-box.mb-4
+      [:div.flex-1 [:h1.text-xl.font-bold.px-2 "koofma"]]
+      [:div.flex-none.gap-2.px-2
+       (sync-indicator sync-state)
+       [:button.btn.btn-ghost.btn-circle.btn-sm
+        {:on {:click [[:action/open-settings]]}} "⚙"]]]
+     (list-tabs doc current)
+     (quick-add)
+     [:ul#items.flex.flex-col.gap-1
+      (for [[id :as entry] items]
+        (item-row entry (= editing-id id) db))]
+     (when (empty? items)
+       [:p.text-center.opacity-60.mt-8 "Nothing to buy."])
+     (flash-toast flash)
+     (list-dialog doc dialog)
+     (settings-dialog remote-config sync-state sync-error)]))

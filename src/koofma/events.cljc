@@ -23,21 +23,27 @@
   (throw (ex-info "Unknown event" {:event event-id})))
 
 
+(defn current-list
+  [db]
+  (model/resolve-list (:doc db) (:current-list db)))
+
+
 (defmethod handle :item/add
   [db [_ {:keys [id title]}] now]
-  (let [title (str/trim (or title ""))]
+  (let [title   (str/trim (or title ""))
+        list-id (current-list db)]
     (cond
       (str/blank? title)
       db
 
-      (model/find-alive-by-title (:doc db) title)
+      (model/find-alive-by-title (:doc db) list-id title)
       (assoc db :flash {:type :duplicate :title title})
 
       :else
       (let [[db' t] (stamp db now)
             id      (or id (random-uuid))
-            rank    (model/rank-at-top (:doc db))]
-        (update db' :doc model/add-item id title rank t)))))
+            rank    (model/rank-at-top (:doc db) list-id)]
+        (update db' :doc model/add-item id list-id title rank t)))))
 
 
 (defmethod handle :item/set-title
@@ -52,7 +58,8 @@
         [db' t] (stamp db now)]
     (-> db'
         (update :doc model/delete-item id t)
-        (assoc :flash {:type :undo-check :id id :title title}))))
+        (assoc :flash {:type :undo-check :id id :title title
+                       :undo [:item/undelete {:id id}]}))))
 
 
 (defmethod handle :item/undelete
@@ -67,6 +74,48 @@
     (let [[db' t] (stamp db now)]
       (update db' :doc model/move-item id rank t))
     db))
+
+
+(defmethod handle :list/add
+  [db [_ {:keys [id name]}] now]
+  (let [name (str/trim (or name ""))]
+    (if (str/blank? name)
+      db
+      (let [[db' t] (stamp db now)
+            id      (or id (random-uuid))
+            rank    (model/list-rank-at-end (:doc db))]
+        (-> db'
+            (update :doc model/add-list id name rank t)
+            (assoc :current-list id))))))
+
+
+(defmethod handle :list/rename
+  [db [_ {:keys [id name]}] now]
+  (let [name (str/trim (or name ""))]
+    (if (str/blank? name)
+      db
+      (let [[db' t] (stamp db now)]
+        (update db' :doc model/rename-list id name t)))))
+
+
+(defmethod handle :list/delete
+  [db [_ {:keys [id]}] now]
+  (if (< (count (model/lists (:doc db))) 2)
+    db
+    (let [name    (model/list-name (:doc db) id)
+          [db' t] (stamp db now)]
+      (-> db'
+          (update :doc model/delete-list id t)
+          (assoc :flash {:type :undo-list-delete :id id :title name
+                         :undo [:list/undelete {:id id}]})))))
+
+
+(defmethod handle :list/undelete
+  [db [_ {:keys [id]}] now]
+  (let [[db' t] (stamp db now)]
+    (-> db'
+        (update :doc model/undelete-list id t)
+        (assoc :current-list id))))
 
 
 (defmethod handle :remote/merged
@@ -97,6 +146,16 @@
 
 
 ;; UI-only state (not part of the CRDT doc): no clock stamp.
+
+(defmethod handle :ui/select-list
+  [db [_ {:keys [id]}] _]
+  (-> db (assoc :current-list id) (dissoc :editing-id)))
+
+
+(defmethod handle :ui/list-dialog
+  [db [_ dialog] _]
+  (if dialog (assoc db :list-dialog dialog) (dissoc db :list-dialog)))
+
 
 (defmethod handle :ui/edit-item
   [db [_ {:keys [id]}] _]
