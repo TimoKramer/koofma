@@ -9,3 +9,11 @@
   touch-action: none;
   cursor: grab;
 }
+
+/* List tabs are long-pressed for their menu: no text selection or iOS
+   callout getting in the way. */
+.list-tab {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}

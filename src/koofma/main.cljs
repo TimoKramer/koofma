@@ -33,6 +33,11 @@
 (def flash-timeout-ms 5000)
 
 
+;; Pending long-press on a list tab (touch/pen); survives hot-reload too.
+(defonce long-press-timeout (atom nil))
+(def long-press-ms 500)
+
+
 (defn- reconcile-if-configured!
   [system]
   (when-let [remote-store @(:remote system)]
@@ -136,11 +141,42 @@
         (app/dispatch! system [:flash/clear]))
 
       :action/open-list-dialog
-      (let [[dialog] args]
+      (let [[dialog] args
+            el       (js/document.getElementById "list-dialog")]
         ;; renders synchronously (the ::render watch), so the dialog already
-        ;; holds the right form when it opens
+        ;; holds the right content when it opens
         (app/dispatch! system [:ui/list-dialog dialog])
-        (some-> (js/document.getElementById "list-dialog") .showModal))
+        (when el
+          (if (.-open el)
+            ;; switching screens inside the open dialog (menu → rename):
+            ;; autofocus only applies on showModal, so focus by hand
+            (some-> (.querySelector el "[autofocus]") .focus)
+            (.showModal el))))
+
+      :action/long-press-start
+      (let [[dialog] args]
+        (some-> @long-press-timeout js/clearTimeout)
+        ;; mouse users right-click instead
+        (when (not= "mouse" (.-pointerType dom-event))
+          (reset! long-press-timeout
+                  (js/setTimeout
+                    (fn []
+                      (reset! long-press-timeout nil)
+                      (some-> js/navigator .-vibrate (.call js/navigator 10))
+                      (execute-actions! system nil [[:action/open-list-dialog dialog]]))
+                    long-press-ms))))
+
+      :action/long-press-cancel
+      (do (some-> @long-press-timeout js/clearTimeout)
+          (reset! long-press-timeout nil))
+
+      :action/context-menu
+      ;; right-click / context-menu key; Android also fires this on long
+      ;; press, so drop a pending long-press to open the menu only once
+      (let [[dialog] args]
+        (.preventDefault dom-event)
+        (execute-actions! system dom-event [[:action/long-press-cancel]
+                                            [:action/open-list-dialog dialog]]))
 
       :action/close-list-dialog
       (do (some-> (js/document.getElementById "list-dialog") .close)

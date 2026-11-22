@@ -89,31 +89,77 @@
 
 
 (defn- list-tabs
-  "Tap a tab to switch lists; ✎ renames/deletes the current one, + adds one."
+  "Tap a tab to switch lists; long-press (touch) or right-click (mouse) one
+  for its rename/delete menu, + adds one."
   [doc current]
-  [:div.flex.items-center.gap-2.mb-3
-   [:div.tabs.tabs-box.flex-1.flex-nowrap.overflow-x-auto {:role "tablist"}
-    (for [[id l] (model/lists doc)]
-      [:button.tab.whitespace-nowrap
+  [:div.mb-3
+   [:div.tabs.tabs-box.flex-nowrap.overflow-x-auto {:role "tablist"}
+    (for [[id l] (model/lists doc)
+          :let [menu {:mode :menu :id id}]]
+      [:button.tab.list-tab.whitespace-nowrap
        {:replicant/key id
         :role "tab"
         :class (when (= id current) "tab-active")
-        :on {:click (dispatch [:ui/select-list {:id id}])}}
+        :on {:click         (dispatch [:ui/select-list {:id id}])
+             :pointerdown   [[:action/long-press-start menu]]
+             :pointerup     [[:action/long-press-cancel]]
+             :pointerleave  [[:action/long-press-cancel]]
+             :pointercancel [[:action/long-press-cancel]]
+             :contextmenu   [[:action/context-menu menu]]}}
        (model/fval l :name)])
     [:button.tab {:role "tab" :title "New list" :aria-label "New list"
                   :on {:click [[:action/open-list-dialog {:mode :new}]]}}
-     "+"]]
-   [:button.btn.btn-ghost.btn-sm.btn-circle
-    {:title "Rename or delete this list" :aria-label "Rename or delete this list"
-     :on {:click [[:action/open-list-dialog {:mode :edit :id current}]]}}
-    "✎"]])
+     "+"]]])
 
 
-(defn- list-dialog
-  "New-list / rename-list form. Delete only while another list remains."
+(defn- items-label
+  [n]
+  (str n (if (= 1 n) " item" " items")))
+
+
+(defn- list-menu
+  "Rename / Delete for one list. Deleting a list that still has items goes
+  through :confirm-delete first; the last list can't be deleted."
+  [doc id]
+  (let [n          (count (model/items doc id))
+        deletable? (< 1 (count (model/lists doc)))]
+    (list
+      [:h3.font-bold.text-lg.mb-4.break-words (model/list-name doc id)]
+      [:div.flex.flex-col.gap-2
+       [:button.btn.btn-block
+        {:on {:click [[:action/open-list-dialog {:mode :edit :id id}]]}} "Rename"]
+       [:button.btn.btn-block.btn-error.btn-outline
+        {:disabled (not deletable?)
+         :on {:click (if (pos? n)
+                       [[:action/open-list-dialog {:mode :confirm-delete :id id}]]
+                       [[:action/delete-list id]])}}
+        "Delete"]
+       (when-not deletable?
+         [:p.text-sm.opacity-60 "The last list can't be deleted."])]
+      [:div.modal-action
+       [:button.btn {:on {:click [[:action/close-list-dialog]]}} "Cancel"]])))
+
+
+(defn- confirm-delete
+  [doc id]
+  (let [n (count (model/items doc id))]
+    (list
+      [:h3.font-bold.text-lg.mb-4 "Delete list?"]
+      [:div.alert.alert-warning
+       [:span "\"" (model/list-name doc id) "\" still has "
+        [:strong (items-label n)] ". Deleting the list deletes "
+        (if (= 1 n) "it" "them") " too."]]
+      [:div.modal-action
+       [:button.btn {:on {:click [[:action/close-list-dialog]]}} "Cancel"]
+       [:button.btn.btn-error
+        {:on {:click [[:action/delete-list id]]}}
+        (str "Delete list and " (items-label n))]])))
+
+
+(defn- list-form
+  "New-list / rename-list form."
   [doc {:keys [mode id]}]
-  [:dialog#list-dialog.modal
-   [:div.modal-box
+  (list
     [:h3.font-bold.text-lg.mb-4 (if (= mode :edit) "Rename list" "New list")]
     [:form.flex.flex-col.gap-2
      {:on {:submit [[:action/save-list :event/target]]}}
@@ -123,11 +169,20 @@
        :placeholder "List name"
        :value (if (= mode :edit) (model/list-name doc id) "")}]
      [:div.modal-action
-      (when (and (= mode :edit) (< 1 (count (model/lists doc))))
-        [:button.btn.btn-error.btn-outline.mr-auto
-         {:type "button" :on {:click [[:action/delete-list id]]}} "Delete"])
       [:button.btn {:type "button" :on {:click [[:action/close-list-dialog]]}} "Cancel"]
-      [:button.btn.btn-primary {:type "submit"} "Save"]]]]])
+      [:button.btn.btn-primary {:type "submit"} "Save"]]]))
+
+
+(defn- list-dialog
+  [doc {:keys [mode id] :as dialog}]
+  [:dialog#list-dialog.modal
+   {:on {:close [[:action/close-list-dialog]]}}
+   [:div.modal-box
+    (case mode
+      :menu           (list-menu doc id)
+      :confirm-delete (confirm-delete doc id)
+      (:new :edit)    (list-form doc dialog)
+      nil)]])
 
 
 (defn- sync-indicator

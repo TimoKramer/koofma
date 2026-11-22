@@ -6,9 +6,11 @@ Replicant, Tailwind/daisyUI) in the style of
 sync through an S3/Cloudflare R2 bucket using a CRDT (per-field LWW registers
 with hybrid logical clocks), so concurrent offline edits always merge.
 
-- Multiple lists with custom names: switch with the tabs, **+** adds one,
-  ✎ renames or deletes the current one (with **Undo**). Lists sync too; which
-  list is open is remembered per device.
+- Multiple lists with custom names: switch with the tabs, **+** adds one.
+  Long-press a tab (touch) or right-click it (mouse) to rename or delete
+  it; deleting a list that still has items
+  asks for confirmation first, and there's **Undo** either way. Lists sync
+  too; which list is open is remembered per device.
 - Checking an item off deletes it; an **Undo** toast stays for 5 seconds.
 - Reorder items by dragging the ⠿ handle (touch and mouse).
 - The input suggests titles from everything ever entered (checked-off items
